@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: CoTrial RAG v2 - FastAPI Lambda with FAISS and S3 (using Layers)
+
+Parameters:
+  RAGBucket:
+    Type: String
+    Description: S3 bucket name for RAG indices
+  RAGManifestKey:
+    Type: String
+    Default: rag/manifest.json
+    Description: S3 key for manifest JSON
+  EmbedModel:
+    Type: String
+    Default: text-embedding-3-small
+    Description: Embedding model name
+  OpenAIApiKey:
+    Type: String
+    Description: OpenAI API key (or use Secrets Manager)
+    NoEcho: true
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 2048
+    Runtime: python3.11
+    Environment:
+      Variables:
+        RAG_BUCKET: !Ref RAGBucket
+        RAG_MANIFEST_KEY: !Ref RAGManifestKey
+        EMBED_MODEL: !Ref EmbedModel
+        OPENAI_API_KEY: !Ref OpenAIApiKey
+        USE_RETRIEVER: faiss
+        MAX_TOKENS: '2048'
+        TOP_K: '5'
+        FUSION_K: '8'
+
+Resources:
+  # Layer for large dependencies (FAISS, NumPy, Pandas)
+  DependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: rag-dependencies
+      Description: FAISS, NumPy, Pandas and other large dependencies
+      ContentUri: layer/
+      CompatibleRuntimes:
+        - python3.11
+      CompatibleArchitectures:
+        - x86_64
+      RetentionPolicy: Retain
+
+  RAGApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src.api.server.handler
+      CodeUri: .
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      MemorySize: 2048
+      Timeout: 30
+      Layers:
+        - !Ref DependenciesLayer
+      Environment:
+        Variables:
+          RAG_BUCKET: !Ref RAGBucket
+          RAG_MANIFEST_KEY: !Ref RAGManifestKey
+          EMBED_MODEL: !Ref EmbedModel
+          OPENAI_API_KEY: !Ref OpenAIApiKey
+          USE_RETRIEVER: faiss
+          MAX_TOKENS: '2048'
+          TOP_K: '5'
+          FUSION_K: '8'
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref RAGBucket
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+
+Outputs:
+  RAGApi:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/
+  RAGApiFunction:
+    Description: RAG Lambda Function ARN
+    Value: !GetAtt RAGApiFunction.Arn
+  DependenciesLayer:
+    Description: Dependencies Layer ARN
+    Value: !Ref DependenciesLayer
+
+

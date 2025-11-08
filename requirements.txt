@@ -1,0 +1,14 @@
+# Lambda runtime dependencies (FAISS and NumPy are in the layer)
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+boto3>=1.28.0
+# faiss-cpu and numpy are in DependenciesLayer - NOT here
+httpx>=0.25.0
+tenacity>=8.2.0
+python-dotenv>=1.0.0
+structlog>=23.2.0
+mangum>=0.17.0
+
+# Note: pandas, pypdf, pyreadstat are NOT needed for Lambda runtime
+# They're only used when building indices locally
