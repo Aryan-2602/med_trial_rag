@@ -1,2 +1,2 @@
-"""Indexer modules for building FAISS indices."""
+"""Indexer modules (legacy - indexers moved to scripts)."""
 

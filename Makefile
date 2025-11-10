@@ -1,4 +1,4 @@
-.PHONY: install install-frontend fmt lint test run run-frontend clean build-index-pdf build-index-sas
+.PHONY: install install-frontend fmt lint test run run-frontend clean
 
 install:
 	pip install -r requirements.txt
@@ -32,19 +32,36 @@ clean:
 	find . -type f -name "*.pyo" -delete
 	rm -rf .pytest_cache .coverage htmlcov dist build *.egg-info
 
-build-index-pdf:
-	python -m src.indexers.build_pdf_index \
+# Local development commands
+# Note: MySQL should be running on your local machine
+# Set MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB environment variables
+
+migrate-sas:
+	PYTHONPATH=. python scripts/migrate_sas_to_mysql_optimized.py \
+		--input-dir data/AllProvidedFiles_438/h3e_us_s130_control_data
+
+# Build PDF indices locally using Chroma vector DB
+build-pdf-indices-local:
+	PYTHONPATH=. python scripts/build_pdf_index_vector_db.py \
 		--input-dir data/AllProvidedFiles_438 \
-		--bucket $(RAG_BUCKET) \
-		--prefix rag/pdf_index \
-		--manifest-key rag/manifest.json \
 		--model text-embedding-3-small
 
-build-index-sas:
-	python -m src.indexers.build_sas_index \
-		--input-dir data/AllProvidedFiles_438/h3e_us_s130_control_data \
-		--bucket $(RAG_BUCKET) \
-		--prefix rag/sas_index \
-		--manifest-key rag/manifest.json \
-		--model text-embedding-3-small
+# Reset vector DB (delete existing collection)
+reset-vector-db:
+	PYTHONPATH=. python scripts/build_pdf_index_vector_db.py \
+		--input-dir data/AllProvidedFiles_438 \
+		--model text-embedding-3-small \
+		--reset
+
+# Test local setup
+test-local:
+	python scripts/test_local_setup.py
+
+# Run everything (API + Frontend)
+run-all:
+	./run_app.sh
+
+# Run API only
+run-api:
+	./run_api_only.sh
 

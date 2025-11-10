@@ -1,157 +1,118 @@
 # CoTrial RAG v2
 
-A production-ready RAG (Retrieval-Augmented Generation) system that provides a single chat-style API to query two corpora:
+A production-ready RAG (Retrieval-Augmented Generation) system with intelligent agentic routing that queries three data sources:
 
-- **SAS corpus**: Tabular/clinical data (chunked + embedded)
-- **PDF corpus**: Documents (chunked + embedded)
+- **PDF Documents**: Protocol documents, study design (ChromaDB vector search)
+- **SQL Database**: Patient data, statistics, aggregations (MySQL)
+- **Context Cache**: Pre-computed Q&A pairs (JSON-based caching)
 
-Both corpora are indexed as FAISS vectors and stored on S3. At runtime, a FastAPI Lambda downloads indices from S3 into `/tmp`, loads FAISS, performs per-corpus search, then fuses results via Reciprocal Rank Fusion (RRF). It then optionally calls an LLM (OpenAI) with the fused context to produce an answer with citations.
+The system uses **result-aware routing** with LLM-based quality evaluation to intelligently combine results from multiple sources.
 
 ## Features
 
-- **Dual Corpus Support**: Query both PDF documents and SAS clinical data simultaneously
-- **FAISS Vector Search**: Fast similarity search using FAISS with cosine similarity
-- **Reciprocal Rank Fusion**: Combines results from multiple corpora intelligently
-- **S3-Based Storage**: Indices stored on S3 for scalability
+- **Hybrid Architecture**: PDF (vector search), SAS (SQL queries), Context (Q&A cache)
+- **Agentic Routing**: LLM-based intelligent query routing with result quality evaluation
+- **ChromaDB Vector Search**: Fast semantic similarity search for PDF documents
+- **LLM-based SQL Generation**: GPT converts natural language to accurate SQL queries
+- **Context Cache**: Pre-computed Q&A pairs act as fast lookup for similar queries
+- **Parallel Search**: PDF and SQL searches execute simultaneously
+- **Result Quality Evaluation**: LLM evaluates and combines results intelligently
 - **FastAPI API**: Modern, type-safe API with automatic documentation
-- **AWS Lambda Ready**: Deployable as serverless function
-- **Offline Testing**: Deterministic embeddings for testing without API keys
-- **Structured Logging**: JSON logs with request IDs and timing information
+- **Streamlit Frontend**: Beautiful chat interface for querying
+- **GPT-4o Answer Generation**: High-quality synthesized answers from retrieved context
 
 ## Architecture
 
 - **Language**: Python 3.11+ with type hints
 - **Framework**: FastAPI, Pydantic v2
-- **Vector Search**: FAISS (IndexFlatIP for cosine similarity)
-- **Storage**: S3 (read-only at runtime)
-- **Embeddings**: OpenAI text-embedding-3-small (configurable)
-- **Deployment**: AWS Lambda + API Gateway (SAM template included)
+- **PDF Search**: ChromaDB with OpenAI embeddings (text-embedding-3-small)
+- **SAS Search**: MySQL with LLM-generated SQL queries
+- **Context Cache**: JSON-based Q&A examples (auto-cleaned on load)
+- **Storage**: Local ChromaDB, MySQL database
+- **Embeddings**: OpenAI text-embedding-3-small
+- **LLM Models**: GPT-4o (answers), GPT-4o-mini (routing, SQL generation)
 
-## Quickstart
+## Quick Start
+
+### Easiest Way (One Command)
+
+```bash
+# Set credentials
+export MYSQL_PASSWORD=Pinnacle232
+export OPENAI_API_KEY=sk-your-key-here
+
+# Run everything
+./run_app.sh
+```
+
+Opens at: **http://localhost:8501**
 
 ### Prerequisites
 
 - Python 3.11+
-- AWS account with S3 bucket
-- OpenAI API key (for embeddings)
-- (Optional) AWS SAM CLI for deployment
+- MySQL running on local machine
+- OpenAI API key
 
-### Local Development
+### Setup Steps
 
-1. **Clone and setup environment**:
-
+1. **Create virtual environment**:
 ```bash
-# Create virtual environment (if not already created)
 python3 -m venv .venv
-
-# Activate virtual environment
-# On macOS/Linux:
 source .venv/bin/activate
-# Or use the helper script:
-source activate.sh
+```
 
-# On Windows:
-# .venv\Scripts\activate
-# Or use the helper script:
-# activate.bat
-
-# Install dependencies
+2. **Install dependencies**:
+```bash
 make install
-```
-
-2. **Configure environment variables**:
-
-```bash
-cp .env.example .env
-# Edit .env with your values:
-# RAG_BUCKET=your-bucket-name
-# OPENAI_API_KEY=sk-your-key-here
-```
-
-3. **Run the API**:
-
-```bash
-make run
-```
-
-Visit `http://localhost:8000/docs` for interactive API documentation.
-
-4. **Run the Streamlit Frontend** (optional):
-
-```bash
-# Install frontend dependencies
 make install-frontend
-
-# Run the frontend
-make run-frontend
 ```
 
-Visit `http://localhost:8501` for the chat interface.
-
-**Note:** The frontend connects to the deployed API by default. To use a local API, set the `RAG_API_URL` environment variable:
+3. **Set environment variables**:
 ```bash
-export RAG_API_URL=http://localhost:8000
-make run-frontend
-```
-
-### Building Indices
-
-#### PDF Index
-
-```bash
-export RAG_BUCKET=your-bucket-name
+source setup_local_env.sh
+export MYSQL_PASSWORD=your_mysql_password
 export OPENAI_API_KEY=sk-your-key-here
-
-make build-index-pdf
-# Or manually:
-python -m src.indexers.build_pdf_index \
-    --input-dir data/AllProvidedFiles_438 \
-    --bucket $RAG_BUCKET \
-    --prefix rag/pdf_index \
-    --manifest-key rag/manifest.json \
-    --model text-embedding-3-small
 ```
 
-#### SAS Index
-
+4. **Create MySQL database**:
 ```bash
-make build-index-sas
-# Or manually:
-python -m src.indexers.build_sas_index \
-    --input-dir data/AllProvidedFiles_438/h3e_us_s130_control_data \
-    --bucket $RAG_BUCKET \
-    --prefix rag/sas_index \
-    --manifest-key rag/manifest.json \
-    --model text-embedding-3-small
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS cotrial_rag;"
 ```
 
-### Testing
-
-Run tests with offline embeddings (no API keys needed):
-
+5. **Build PDF indices** (one-time):
 ```bash
-make test
+make build-pdf-indices-local
 ```
 
-For coverage:
-
+6. **Migrate SAS data** (one-time):
 ```bash
-make test-cov
+make migrate-sas
 ```
 
-### Code Quality
+### Run the System
 
-Format code:
-
+**Option 1: Run both together**
 ```bash
-make fmt
+./run_app.sh
 ```
 
-Lint and type check:
-
+**Option 2: Run separately**
 ```bash
-make lint
+# Terminal 1 - API
+make run
+
+# Terminal 2 - Frontend  
+make run-frontend
 ```
+
+Visit: **http://localhost:8501**
+
+## Documentation
+
+- **[QUICK_START.md](QUICK_START.md)** - Quick start guide
+- **[docs/AGENTIC_ROUTING_ARCHITECTURE.md](docs/AGENTIC_ROUTING_ARCHITECTURE.md)** - Agentic routing architecture
+- **[docs/LLM_SQL_GENERATION_GUIDE.md](docs/LLM_SQL_GENERATION_GUIDE.md)** - SQL generation guide for LLMs
+- **[docs/SQL_SCHEMA.md](docs/SQL_SCHEMA.md)** - MySQL schema documentation
 
 ## API Endpoints
 
@@ -162,11 +123,11 @@ Get status of the RAG system.
 **Response**:
 ```json
 {
-  "retriever": "faiss",
-  "manifest_version": "v20250101",
+  "retriever": "hybrid",
+  "manifest_version": "v20251108",
   "corpora": {
-    "pdf": 12345,
-    "sas": 9876
+    "pdf": 184,
+    "sas": -1
   },
   "loaded": true
 }
@@ -203,172 +164,133 @@ Query the RAG system.
 
 Simple health check endpoint.
 
+Visit `http://localhost:8000/docs` for interactive API documentation.
+
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `RAG_BUCKET` | S3 bucket name for indices | **Required** |
-| `RAG_MANIFEST_KEY` | S3 key for manifest JSON | `rag/manifest.json` |
+| `USE_LOCAL_MODE` | Use local mode | `1` |
+| `VECTOR_DB_PATH` | ChromaDB storage path | `data/vector_db` |
+| `MYSQL_HOST` | MySQL host | `localhost` |
+| `MYSQL_PORT` | MySQL port | `3306` |
+| `MYSQL_DB` | MySQL database name | `cotrial_rag` |
+| `MYSQL_USER` | MySQL user | `root` |
+| `MYSQL_PASSWORD` | MySQL password | **Required** |
 | `EMBED_MODEL` | Embedding model name | `text-embedding-3-small` |
-| `OPENAI_API_KEY` | OpenAI API key | **Required** (unless `EMBED_OFFLINE=1`) |
-| `USE_RETRIEVER` | Retriever type | `faiss` |
-| `MAX_TOKENS` | Max tokens for answer | `2048` |
+| `OPENAI_API_KEY` | OpenAI API key | **Required** |
+| `ANSWER_MODEL` | Model for answer generation | `gpt-4o` |
+| `ROUTER_MODEL` | Model for routing decisions | `gpt-4o-mini` |
+| `SQL_MODEL` | Model for SQL generation | `gpt-4o-mini` |
 | `TOP_K` | Results per corpus | `5` |
-| `FUSION_K` | RRF fusion constant | `8` |
-| `EMBED_OFFLINE` | Use deterministic embeddings (testing) | `0` |
-
-## Deployment
-
-For detailed deployment instructions, see [DEPLOYMENT.md](docs/DEPLOYMENT.md).
-
-### Quick Start
-
-1. **Prerequisites**: Install AWS CLI and SAM CLI
-   ```bash
-   brew install awscli aws-sam-cli  # macOS
-   aws configure  # Set up credentials
-   ```
-
-2. **Create S3 Bucket**:
-   ```bash
-   export RAG_BUCKET="your-bucket-name"
-   aws s3 mb s3://$RAG_BUCKET
-   ```
-
-3. **Build and Upload Indices**:
-   ```bash
-   source .venv/bin/activate
-   export OPENAI_API_KEY="sk-your-key"
-   
-   # Build PDF index
-   python -m src.indexers.build_pdf_index \
-     --input-dir data/AllProvidedFiles_438 \
-     --bucket $RAG_BUCKET \
-     --prefix rag/pdf_index \
-     --manifest-key rag/manifest.json
-   
-   # Build SAS index
-   python -m src.indexers.build_sas_index \
-     --input-dir data/AllProvidedFiles_438/h3e_us_s130_control_data \
-     --bucket $RAG_BUCKET \
-     --prefix rag/sas_index \
-     --manifest-key rag/manifest.json
-   ```
-
-4. **Deploy Lambda**:
-   ```bash
-   sam build
-   sam deploy --guided
-   ```
-
-5. **Test**:
-   ```bash
-   # Get API URL from stack outputs
-   export API_URL=$(aws cloudformation describe-stacks \
-     --stack-name cotrial-rag-v2 \
-     --query 'Stacks[0].Outputs[?OutputKey==`RAGApi`].OutputValue' \
-     --output text)
-   
-   curl $API_URL/health
-   curl $API_URL/v1/status | jq .
-   ```
-
-### Lambda Configuration
-
-- **Runtime**: Python 3.11
-- **Memory**: 2048 MB (adjust based on index size)
-- **Timeout**: 30 seconds
-- **IAM Role**: Read-only access to S3 bucket
 
 ## Project Structure
 
 ```
 cotrial-ragv2/
 ├── src/
-│   ├── api/              # FastAPI application
-│   │   ├── server.py     # Main app and routes
-│   │   └── models.py     # Pydantic models
-│   ├── retrieval/        # Retrieval layer
-│   │   ├── base.py       # Retriever protocol
-│   │   └── faiss_s3.py   # FAISS + S3 retriever
-│   ├── utils/            # Utilities
-│   │   ├── config.py     # Configuration
-│   │   ├── embeddings.py # Embedding utilities
-│   │   ├── fusion.py     # RRF fusion
-│   │   ├── logging.py    # Structured logging
-│   │   └── s3io.py       # S3 I/O utilities
-│   ├── indexers/         # Index builders
-│   │   ├── common.py     # Common utilities
-│   │   ├── build_pdf_index.py
-│   │   └── build_sas_index.py
-│   └── data_schemas/     # Data schemas
-│       └── manifest.py   # Manifest schema
-├── tests/                # Test suite
-├── docs/                 # Documentation
-│   ├── ARCHITECTURE.md
-│   └── OPS_RUNBOOK.md
-├── template.yaml         # AWS SAM template
-├── Makefile             # Development commands
-└── requirements.txt     # Python dependencies
+│   ├── api/                  # FastAPI application
+│   │   ├── server.py         # Main app and routes
+│   │   └── models.py         # Pydantic models
+│   ├── retrieval/            # Retrieval layer
+│   │   ├── base.py           # Retriever protocol
+│   │   ├── hybrid.py         # Hybrid retriever (PDF + SQL + Context)
+│   │   └── vector_db_retriever.py # ChromaDB retriever
+│   ├── utils/                # Utilities
+│   │   ├── agentic_router.py # LLM-based query routing
+│   │   ├── answer_generator.py # GPT-4o answer generation
+│   │   ├── config.py         # Configuration
+│   │   ├── embeddings.py     # Embedding utilities
+│   │   ├── logging.py        # Structured logging
+│   │   ├── mysql_client.py   # MySQL client
+│   │   ├── prompt_examples.py # Context cache loader
+│   │   ├── sql_generator.py  # LLM-based SQL generation
+│   │   └── vector_db.py      # ChromaDB client
+│   ├── indexers/             # Index builders
+│   │   └── common.py         # Common utilities
+│   └── frontend/             # Streamlit frontend
+│       └── app.py            # Chat interface
+├── scripts/                  # Utility scripts
+│   ├── build_pdf_index_vector_db.py
+│   ├── migrate_sas_to_mysql_optimized.py
+│   ├── process_qa_for_prompt_engineering.py
+│   └── batch_clean_prompt_engineering.py
+├── docs/                     # Documentation
+│   ├── AGENTIC_ROUTING_ARCHITECTURE.md
+│   ├── LLM_SQL_GENERATION_GUIDE.md
+│   └── SQL_SCHEMA.md
+├── data/                     # Data directory
+│   ├── vector_db/            # ChromaDB storage
+│   ├── prompt_engineering/   # Q&A context cache
+│   └── AllProvidedFiles_438/ # Source files
+├── tests/                    # Test suite
+├── Makefile                  # Development commands
+├── run_app.sh                # Run everything script
+├── run_api_only.sh           # Run API only
+└── requirements.txt          # Python dependencies
 ```
 
-## Security
+## Testing
 
-- **No secrets in code**: All secrets via environment variables
-- **S3 bucket**: Private, SSE enabled (documented)
-- **Lambda IAM**: Read-only access to RAG bucket only
-- **Input validation**: Pydantic models validate all inputs
-- **Rate limiting**: Consider adding API Gateway throttling
+```bash
+# Test local setup
+make test-local
 
-## Performance
+# Run unit tests
+make test
+```
 
-- **Cold start**: < 3s for small indices (downloads from S3 to `/tmp`)
-- **Warm path**: Indices cached in `/tmp/rag/<corpus>/<version>/`
-- **Vector search**: FAISS IndexFlatIP (cosine similarity via dot product)
-- **Normalization**: Vectors L2-normalized at index time
+## Code Quality
 
-## Cost Considerations
+```bash
+# Format code
+make fmt
 
-- **S3**: Storage costs for indices (~100MB-1GB depending on corpus size)
-- **Lambda**: Compute time (2048 MB, 30s timeout)
-- **OpenAI**: Embedding API costs per query
-- **API Gateway**: Request costs
+# Lint and type check
+make lint
+```
+
+## Query Examples
+
+### PDF Queries (Document Content)
+- "What are the inclusion criteria?"
+- "What are the exclusion criteria?"
+- "What is the study protocol?"
+- "What is the dosing schedule?"
+
+### SQL Queries (Data Analysis)
+- "How many patients are in the study?"
+- "What are the most common adverse events?"
+- "Show me patients with age > 65"
+- "Which treatments are listed in PDSUMM and how many rows each?"
+
+### Hybrid Queries (Both)
+- "What are the inclusion criteria and how many patients meet them?"
 
 ## Troubleshooting
 
-### Common Issues
+**Port already in use:**
+```bash
+lsof -i :8000  # Check API port
+lsof -i :8501  # Check frontend port
+```
 
-1. **503 Service Unavailable**: Indices not loaded
-   - Check S3 bucket permissions
-   - Verify manifest.json exists and is valid
-   - Check Lambda logs for errors
+**MySQL connection failed:**
+- Check MySQL is running: `brew services list` (macOS)
+- Verify password: `mysql -u root -p${MYSQL_PASSWORD} -e "SELECT 1;"`
 
-2. **Dimension mismatch**: Index dimension doesn't match embedding model
-   - Rebuild index with correct model
-   - Update manifest.json
+**Vector DB not found:**
+```bash
+make build-pdf-indices-local
+```
 
-3. **Missing files**: Files not found in S3
-   - Verify manifest.json points to correct paths
-   - Check S3 bucket and keys
-
-4. **Cold start timeout**: Lambda timeout during startup
-   - Increase Lambda timeout
-   - Reduce index size or use provisioned concurrency
-
-See [OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md) for detailed operations guide.
-
-## Contributing
-
-1. Create a feature branch
-2. Make changes with tests
-3. Run `make fmt lint test`
-4. Submit PR (see `.github/PULL_REQUEST_TEMPLATE.md`)
+**Dependencies missing:**
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -r requirements-frontend.txt
+```
 
 ## License
 
 MIT
-
-## Documentation
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Operations Runbook](docs/OPS_RUNBOOK.md)

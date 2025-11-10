@@ -7,13 +7,9 @@ from typing import Protocol, runtime_checkable
 class Retriever(Protocol):
     """Protocol for RAG retrievers."""
 
-    def load_from_manifest(self, bucket: str, manifest_key: str) -> None:
+    def load(self) -> None:
         """
-        Load indices from S3 manifest.
-
-        Args:
-            bucket: S3 bucket name
-            manifest_key: S3 key for manifest JSON
+        Load/initialize the retriever.
         """
         ...
 

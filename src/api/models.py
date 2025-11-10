@@ -32,7 +32,7 @@ class StatusResponse(BaseModel):
     """Response model for status endpoint."""
 
     retriever: str = Field(..., description="Retriever type")
-    manifest_version: str = Field(..., description="Manifest version")
+    manifest_version: str = Field(..., description="Version identifier (vector_db for Chroma)")
     corpora: dict[str, int] = Field(..., description="Corpus name to document count mapping")
-    loaded: bool = Field(..., description="Whether indices are loaded")
+    loaded: bool = Field(..., description="Whether retriever is loaded")
 

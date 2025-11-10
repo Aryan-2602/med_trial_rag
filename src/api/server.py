@@ -1,5 +1,6 @@
 """FastAPI server for RAG system."""
 
+import os
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any
@@ -7,24 +8,26 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.models import ChatRequest, ChatResponse, Citation, StatusResponse
-from retrieval.faiss_s3 import FaissS3Retriever
-from utils.config import Config
-from utils.logging import configure_logging, get_logger, get_request_id, set_request_id
+from src.api.models import ChatRequest, ChatResponse, Citation, StatusResponse
+from src.retrieval.hybrid import HybridRetriever
+from src.utils.answer_generator import AnswerGenerator
+from src.utils.config import Config
+from src.utils.logging import configure_logging, get_logger, get_request_id, set_request_id
 
 # Configure logging
 configure_logging()
 logger = get_logger(__name__)
 
-# Global retriever instance
-retriever: FaissS3Retriever | None = None
+# Global retriever instance (hybrid: PDF via Vector DB, SAS via SQL)
+retriever: HybridRetriever | None = None
 config: Config | None = None
+answer_generator: AnswerGenerator | None = None
 _initialized = False
 
 
 def _ensure_initialized() -> None:
     """Initialize retriever on first use (Lambda container reuse)."""
-    global retriever, config, _initialized
+    global retriever, config, answer_generator, _initialized
     
     if _initialized:
         return
@@ -34,14 +37,24 @@ def _ensure_initialized() -> None:
         config = Config.from_env()
         config.validate()
 
-        retriever = FaissS3Retriever(config)
-        retriever.load_from_manifest(config.rag_bucket, config.rag_manifest_key)
+        # Use hybrid retriever (PDF via Vector DB, SAS via SQL)
+        retriever = HybridRetriever(config)
+        retriever.load()  # Load vector DB and MySQL
+
+        # Initialize answer generator
+        try:
+            answer_generator = AnswerGenerator(config)
+            logger.info("answer_generator_initialized")
+        except Exception as e:
+            logger.warning("answer_generator_init_failed", error=str(e))
+            answer_generator = None
 
         app.state.retriever = retriever
         app.state.config = config
+        app.state.answer_generator = answer_generator
 
         _initialized = True
-        logger.info("retriever_initialized", retriever_loaded=True)
+        logger.info("retriever_initialized", retriever_loaded=True, type="hybrid")
     except Exception as e:
         logger.error("initialization_failed", error=str(e), exc_info=True)
         raise
@@ -50,7 +63,7 @@ def _ensure_initialized() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown (local dev only)."""
-    global retriever, config
+    global retriever, config, answer_generator
 
     # Startup
     logger.info("starting_application")
@@ -58,14 +71,24 @@ async def lifespan(app: FastAPI):
         config = Config.from_env()
         config.validate()
 
-        retriever = FaissS3Retriever(config)
-        retriever.load_from_manifest(config.rag_bucket, config.rag_manifest_key)
+        # Use hybrid retriever (PDF via Vector DB, SAS via SQL)
+        retriever = HybridRetriever(config)
+        retriever.load()  # Load vector DB and MySQL
+
+        # Initialize answer generator
+        try:
+            answer_generator = AnswerGenerator(config)
+            logger.info("answer_generator_initialized")
+        except Exception as e:
+            logger.warning("answer_generator_init_failed", error=str(e))
+            answer_generator = None
 
         # Attach to app state
         app.state.retriever = retriever
         app.state.config = config
+        app.state.answer_generator = answer_generator
 
-        logger.info("application_started", retriever_loaded=True)
+        logger.info("application_started", retriever_loaded=True, type="hybrid")
     except Exception as e:
         logger.error("startup_failed", error=str(e))
         raise
@@ -81,8 +104,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="CoTrial RAG v2",
-    description="RAG system with FAISS, S3, and FastAPI",
-    version="0.1.0",
+    description="RAG system with Chroma Vector DB and MySQL",
+    version="0.2.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -130,11 +153,29 @@ async def get_status() -> StatusResponse:
             detail="Retriever not initialized or indices not loaded",
         )
 
-    manifest_version = retriever.manifest.version if retriever.manifest else "unknown"
-    corpora = retriever.corpus_counts.copy()
+    # Get status from retrievers
+    manifest_version = "vector_db"  # Vector DB doesn't use manifest versioning
+    corpora: dict[str, int] = {}
+    
+    # Get PDF count from vector DB
+    if retriever.pdf_retriever and retriever.pdf_retriever.loaded:
+        try:
+            pdf_count = retriever.pdf_retriever.vector_db.get_count()
+            corpora["pdf"] = pdf_count
+        except Exception:
+            corpora["pdf"] = -1  # Unknown count
+    
+    # Add SAS status (from MySQL)
+    if retriever.mysql_client:
+        try:
+            # Test connection to see if SAS is available
+            if retriever.mysql_client.test_connection():
+                corpora["sas"] = -1  # -1 indicates SQL-based (unknown count)
+        except Exception:
+            pass  # MySQL not available
 
     return StatusResponse(
-        retriever=config.use_retriever if config else "unknown",
+        retriever="hybrid" if config else "unknown",
         manifest_version=manifest_version,
         corpora=corpora,
         loaded=retriever.loaded,
@@ -178,95 +219,39 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 citations=[],
             )
 
-        # Generate answer from top results with better formatting
-        top_results = results[:5]  # Use top 5 for answer
-        
-        # Clean and format text snippets
-        answer_parts = []
-        seen_texts = set()  # Deduplicate similar content
-        
-        for result in top_results:
-            text = result.get("text", "").strip()
-            if not text:
-                continue
-            
-            # Skip if we've seen very similar text (deduplication)
-            text_lower = text.lower()[:100]  # Use first 100 chars for comparison
-            if text_lower in seen_texts:
-                continue
-            seen_texts.add(text_lower)
-            
-            # Clean up SAS data - remove metadata noise
-            corpus = result.get("corpus", "")
-            if corpus == "sas":
-                # For SAS data, try to extract meaningful content
-                # SAS data often has format: "Source: file | KEY: value | KEY: value | actual content"
-                if "Source:" in text and "|" in text:
-                    # Split by | and filter out metadata keys
-                    parts = text.split("|")
-                    filtered_parts = []
-                    metadata_keys = {
-                        "RESPROJ", "FACILITY", "SDYID", "USDYID", "SUBJID", 
-                        "INVID", "USUBJID", "SEX", "RACE", "AGEYR", "BIRTHDT",
-                        "BIRTHDTIMPUTFLG", "COUNTRY", "ETHNIC", "TRTSORT", "TRT"
-                    }
-                    
-                    for part in parts:
-                        part = part.strip()
-                        if not part:
-                            continue
-                        # Check if this looks like metadata (KEY: value format)
-                        if ":" in part:
-                            key = part.split(":")[0].strip()
-                            if key in metadata_keys or key == "Source":
-                                continue  # Skip metadata
-                        # Keep if it looks like actual content
-                        if len(part) > 3:
-                            filtered_parts.append(part)
-                    
-                    if filtered_parts:
-                        text = " | ".join(filtered_parts)
-                    else:
-                        # If all was metadata, try to extract any meaningful text after metadata
-                        # Look for content after the last metadata pattern
-                        last_metadata_idx = text.rfind("|")
-                        if last_metadata_idx > 0:
-                            potential_content = text[last_metadata_idx + 1:].strip()
-                            if len(potential_content) > 10:
-                                text = potential_content
-            
-            # Use longer snippets for better context (up to 400 chars)
-            # Try to end at sentence boundaries
-            if len(text) > 400:
-                # Find last sentence ending before 400 chars
-                truncated = text[:400]
-                last_period = truncated.rfind(".")
-                last_newline = truncated.rfind("\n")
-                cutoff = max(last_period, last_newline)
-                if cutoff > 200:  # Only use if we have enough content
-                    text = text[:cutoff + 1]
-                else:
-                    text = text[:400] + "..."
-            
-            answer_parts.append(text)
-        
-        # Join with better formatting
-        if answer_parts:
-            # Use double newlines to separate different sources
-            answer = "\n\n".join(answer_parts)
-            
-            # Limit total length
-            max_length = config.max_tokens * 4 if config else 2000
-            if len(answer) > max_length:
-                # Truncate at sentence boundary if possible
-                truncated = answer[:max_length]
-                last_period = truncated.rfind(".")
-                if last_period > max_length * 0.8:  # Only if we keep most of it
-                    answer = answer[:last_period + 1]
-                else:
-                    answer = truncated + "..."
+        # Use GPT to generate answer from retrieved context
+        global answer_generator
+        if answer_generator is None:
+            try:
+                answer_generator = AnswerGenerator(config)
+            except Exception as e:
+                logger.warning("answer_generator_not_available", error=str(e))
+                answer_generator = None
+
+        if answer_generator:
+            # Generate answer using GPT
+            top_results = results[:10]  # Use top 10 for context
+            answer = answer_generator.generate(
+                query=request.query,
+                context_chunks=top_results,
+            )
         else:
-            answer = "I found relevant documents, but couldn't extract a clear answer. Please check the sources below for more details."
+            # Fallback: simple concatenation if GPT not available
+            logger.warning("using_fallback_answer_generation")
+            top_results = results[:5]
+            answer_parts = []
+            for result in top_results:
+                text = result.get("text", "").strip()
+                if text:
+                    # Truncate long chunks
+                    if len(text) > 500:
+                        text = text[:500] + "..."
+                    answer_parts.append(text)
+            
+            if answer_parts:
+                answer = "\n\n".join(answer_parts)
+            else:
+                answer = "I found relevant documents, but couldn't extract a clear answer. Please check the sources below for more details."
 
         # Build citations
         citations = [

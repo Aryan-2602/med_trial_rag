@@ -1,109 +1,107 @@
-"""Common utilities for indexers."""
+"""Common utilities for indexing documents."""
 
-import json
-from pathlib import Path
-from typing import Any
-
-import faiss
-import numpy as np
-
-from src.utils.logging import get_logger
-
-logger = get_logger(__name__)
+import re
+from typing import List
 
 
-def chunk_text(text: str, max_tokens: int = 512, overlap: int = 64) -> list[str]:
+def chunk_text(text: str, max_tokens: int = 512, overlap: int = 64) -> List[str]:
     """
-    Chunk text into smaller pieces with overlap.
-
-    Uses character-based estimation (roughly 4 chars per token).
-
+    Split text into chunks with overlap.
+    
+    Uses a simple token estimation (1 token ≈ 4 characters) for chunking.
+    For production, consider using tiktoken for accurate token counting.
+    
     Args:
-        text: Input text
+        text: Text to chunk
         max_tokens: Maximum tokens per chunk
-        overlap: Overlap in tokens between chunks
-
+        overlap: Number of tokens to overlap between chunks
+        
     Returns:
         List of text chunks
     """
-    if not text.strip():
+    if not text or not text.strip():
         return []
-
-    # Rough estimation: 4 characters per token
-    max_chars = max_tokens * 4
-    overlap_chars = overlap * 4
-
-    chunks: list[str] = []
-    start = 0
-
-    while start < len(text):
-        end = start + max_chars
-        chunk = text[start:end]
-
-        # Try to break at sentence boundary
-        if end < len(text):
-            last_period = chunk.rfind(".")
-            last_newline = chunk.rfind("\n")
-            break_point = max(last_period, last_newline)
-            if break_point > max_chars * 0.5:  # Only break if reasonable
-                chunk = chunk[: break_point + 1]
-                end = start + break_point + 1
-
-        chunks.append(chunk.strip())
-        start = end - overlap_chars
-
-        if start >= len(text):
-            break
-
-    logger.debug("chunked_text", original_len=len(text), chunks=len(chunks))
+    
+    # Simple token estimation: ~4 characters per token
+    # This is approximate but works for chunking purposes
+    chars_per_token = 4
+    max_chars = max_tokens * chars_per_token
+    overlap_chars = overlap * chars_per_token
+    
+    # Split by paragraphs first (double newlines)
+    paragraphs = re.split(r'\n\s*\n', text)
+    
+    chunks = []
+    current_chunk = []
+    current_length = 0
+    
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+            
+        para_length = len(para)
+        
+        # If paragraph fits, add it
+        if current_length + para_length <= max_chars:
+            current_chunk.append(para)
+            current_length += para_length + 2  # +2 for newline
+        else:
+            # Current chunk is full, save it
+            if current_chunk:
+                chunk_text = '\n\n'.join(current_chunk)
+                chunks.append(chunk_text)
+            
+            # If paragraph itself is too long, split it by sentences
+            if para_length > max_chars:
+                sentences = re.split(r'(?<=[.!?])\s+', para)
+                current_chunk = []
+                current_length = 0
+                
+                for sentence in sentences:
+                    sentence = sentence.strip()
+                    if not sentence:
+                        continue
+                    
+                    sent_length = len(sentence)
+                    
+                    if current_length + sent_length <= max_chars:
+                        current_chunk.append(sentence)
+                        current_length += sent_length + 1
+                    else:
+                        if current_chunk:
+                            chunk_text = ' '.join(current_chunk)
+                            chunks.append(chunk_text)
+                        
+                        # Start new chunk with overlap
+                        if overlap_chars > 0 and chunks:
+                            # Take last part of previous chunk for overlap
+                            prev_chunk = chunks[-1]
+                            overlap_text = prev_chunk[-overlap_chars:] if len(prev_chunk) > overlap_chars else prev_chunk
+                            current_chunk = [overlap_text, sentence] if overlap_text else [sentence]
+                            current_length = len(' '.join(current_chunk))
+                        else:
+                            current_chunk = [sentence]
+                            current_length = sent_length
+            else:
+                # Paragraph fits in new chunk, start fresh
+                # Add overlap from previous chunk if available
+                if overlap_chars > 0 and chunks:
+                    prev_chunk = chunks[-1]
+                    overlap_text = prev_chunk[-overlap_chars:] if len(prev_chunk) > overlap_chars else prev_chunk
+                    current_chunk = [overlap_text, para] if overlap_text else [para]
+                    current_length = len('\n\n'.join(current_chunk))
+                else:
+                    current_chunk = [para]
+                    current_length = para_length
+    
+    # Add final chunk
+    if current_chunk:
+        chunk_text = '\n\n'.join(current_chunk)
+        chunks.append(chunk_text)
+    
+    # Filter out very short chunks (likely artifacts)
+    chunks = [chunk for chunk in chunks if len(chunk.strip()) > 50]
+    
     return chunks
-
-
-def write_jsonl(path: str, items: list[dict[str, Any]]) -> None:
-    """
-    Write list of dicts to JSONL file.
-
-    Args:
-        path: Output file path
-        items: List of dicts to write
-    """
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        for item in items:
-            f.write(json.dumps(item, ensure_ascii=False) + "\n")
-    logger.debug("wrote_jsonl", path=path, count=len(items))
-
-
-def build_faiss_index(vectors: np.ndarray) -> faiss.Index:
-    """
-    Build FAISS index with L2-normalized vectors using IndexFlatIP.
-
-    Args:
-        vectors: Numpy array of shape (n, dimension) with vectors
-
-    Returns:
-        FAISS IndexFlatIP index
-    """
-    if vectors.shape[0] == 0:
-        raise ValueError("Cannot build index from empty vectors")
-
-    dimension = vectors.shape[1]
-
-    # L2 normalize vectors
-    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-    norms[norms == 0] = 1.0  # Avoid division by zero
-    normalized_vectors = vectors / norms
-
-    # Create IndexFlatIP (inner product for cosine similarity)
-    index = faiss.IndexFlatIP(dimension)
-
-    # Ensure vectors are float32 and contiguous
-    normalized_vectors = np.ascontiguousarray(normalized_vectors.astype(np.float32))
-
-    # Add vectors to index
-    index.add(normalized_vectors)
-
-    logger.info("built_faiss_index", dimension=dimension, count=index.ntotal)
-
-    return index
 

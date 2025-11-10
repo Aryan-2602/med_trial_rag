@@ -6,8 +6,8 @@ import os
 import numpy as np
 from openai import OpenAI
 
-from utils.config import Config
-from utils.logging import get_logger
+from src.utils.config import Config
+from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
