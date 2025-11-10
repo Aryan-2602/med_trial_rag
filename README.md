@@ -38,7 +38,7 @@ The system uses **result-aware routing** with LLM-based quality evaluation to in
 
 ```bash
 # Set credentials
-export MYSQL_PASSWORD=Pinnacle232
+export MYSQL_PASSWORD=your_mysql_password
 export OPENAI_API_KEY=sk-your-key-here
 
 # Run everything
@@ -49,63 +49,50 @@ Opens at: **http://localhost:8501**
 
 ### Prerequisites
 
-- Python 3.11+
-- MySQL running on local machine
+- Python 3.9+
+- MySQL 8.0+ running on local machine
 - OpenAI API key
+- Git
 
-### Setup Steps
+### Complete Setup Guide
 
-1. **Create virtual environment**:
+For detailed setup instructions, see **[SETUP.md](SETUP.md)** - a comprehensive guide covering:
+- Automated setup script
+- Manual step-by-step setup
+- Troubleshooting
+- Configuration options
+- Verification checklist
+
+### Quick Setup Steps
+
+1. **Clone and navigate**:
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+git clone <repository-url>
+cd cotrial-ragv2
 ```
 
-2. **Install dependencies**:
+2. **Set environment variables**:
 ```bash
-make install
-make install-frontend
-```
-
-3. **Set environment variables**:
-```bash
-source setup_local_env.sh
 export MYSQL_PASSWORD=your_mysql_password
 export OPENAI_API_KEY=sk-your-key-here
 ```
 
-4. **Create MySQL database**:
+3. **Run the setup script**:
 ```bash
-mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS cotrial_rag;"
-```
-
-5. **Build PDF indices** (one-time):
-```bash
-make build-pdf-indices-local
-```
-
-6. **Migrate SAS data** (one-time):
-```bash
-make migrate-sas
-```
-
-### Run the System
-
-**Option 1: Run both together**
-```bash
+chmod +x run_app.sh
 ./run_app.sh
 ```
 
-**Option 2: Run separately**
-```bash
-# Terminal 1 - API
-make run
+This will automatically:
+- Create virtual environment
+- Install dependencies
+- Check MySQL connection
+- Build PDF indices (if needed)
+- Start both API and frontend
 
-# Terminal 2 - Frontend  
-make run-frontend
-```
+**Access the app:** http://localhost:8501
 
-Visit: **http://localhost:8501**
+For more details, see **[SETUP.md](SETUP.md)** or **[QUICK_START.md](QUICK_START.md)**
 
 ## Documentation
 
