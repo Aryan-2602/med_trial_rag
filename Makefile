@@ -1,10 +1,7 @@
-.PHONY: install install-frontend fmt lint test run run-frontend clean
+.PHONY: install fmt lint test run clean
 
 install:
 	pip install -r requirements.txt
-
-install-frontend:
-	pip install -r requirements-frontend.txt
 
 fmt:
 	ruff check --fix .
@@ -22,9 +19,6 @@ test-cov:
 
 run:
 	uvicorn src.api.server:app --reload --port 8000
-
-run-frontend:
-	streamlit run src/frontend/app.py --server.port 8501
 
 clean:
 	find . -type d -name __pycache__ -exec rm -r {} + 2>/dev/null || true

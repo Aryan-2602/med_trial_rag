@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - CoTrial RAG</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div class="top-bar-content">
+            <h2 class="top-bar-title">Cotrial-AI</h2>
+            <button class="btn-new-chat" onclick="clearChat()" title="Start New Conversation">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14M5 12h14"></path>
+                </svg>
+                New Chat
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="chat-container">
+            <div id="chat-messages">
+                <!-- Messages will be rendered here -->
+            </div>
+
+            <!-- Empty state -->
+            <div id="empty-state" class="empty-state">
+                <h1>How may I assist you today?</h1>
+                <p>Ask me anything about your trial</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Input - Fixed at bottom -->
+    <div class="chat-input-container">
+        <form id="chat-form" class="chat-input-wrapper">
+            <input 
+                type="text" 
+                id="chat-input" 
+                class="chat-input" 
+                placeholder="How can I help you today?"
+                autocomplete="off"
+            >
+            <button type="submit" id="chat-send-btn" class="chat-send-btn" title="Send message">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </form>
+    </div>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/auth.js"></script>
+    <script src="/static/js/chat.js"></script>
+    <script>
+        // Check authentication
+        if (!authManager.requireAuth()) {
+            // Redirect handled by requireAuth
+        }
+
+        // User info no longer needed in sidebar
+
+        // Initialize chat
+        const chatManager = new ChatManager();
+        
+        // Show/hide empty state
+        function updateEmptyState() {
+            const emptyState = document.getElementById('empty-state');
+            const messages = document.getElementById('chat-messages');
+            
+            if (chatManager.messages.length === 0) {
+                emptyState.style.display = 'flex';
+                if (messages) messages.style.display = 'none';
+            } else {
+                emptyState.style.display = 'none';
+                if (messages) messages.style.display = 'block';
+            }
+        }
+
+        // Override addMessage to update empty state
+        const originalAddMessage = chatManager.addMessage.bind(chatManager);
+        chatManager.addMessage = function(...args) {
+            const result = originalAddMessage(...args);
+            updateEmptyState();
+            return result;
+        };
+
+        // Override clearMessages to update empty state
+        const originalClearMessages = chatManager.clearMessages.bind(chatManager);
+        chatManager.clearMessages = function() {
+            originalClearMessages();
+            updateEmptyState();
+        };
+
+        function clearChat() {
+            if (confirm('Are you sure you want to start a new conversation? This will clear all messages.')) {
+                chatManager.clearMessages();
+            }
+        }
+
+        // Render existing messages
+        chatManager.renderAllMessages();
+        updateEmptyState();
+
+        // Focus input on load
+        setTimeout(() => {
+            const input = document.getElementById('chat-input');
+            if (input) input.focus();
+        }, 100);
+    </script>
+</body>
+</html>
+

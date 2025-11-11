@@ -52,17 +52,17 @@ uvicorn src.api.server:app --reload --port 8000
 # Activate venv
 source .venv/bin/activate
 
-# Set environment (API key not needed for frontend)
+# Set environment
 export USE_LOCAL_MODE=1
 export RAG_API_URL=http://localhost:8000
 
-# Run frontend
-make run-frontend
+# Run API (frontend is served automatically)
+make run
 # OR
-streamlit run src/frontend/app.py --server.port 8501
+uvicorn src.api.server:app --reload --port 8000
 ```
 
-**Frontend will be at:** http://localhost:8501
+**Frontend will be at:** http://localhost:8000
 
 ---
 

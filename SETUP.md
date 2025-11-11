@@ -166,18 +166,11 @@ export USE_LOCAL_MODE=1
 uvicorn src.api.server:app --reload --port 8000
 ```
 
-**Terminal 2 - Frontend:**
-```bash
-source .venv/bin/activate
-export USE_LOCAL_MODE=1
-export RAG_API_URL=http://localhost:8000
-
-streamlit run src/frontend/app.py --server.port 8501
-```
+**Note:** The frontend is now served automatically by the FastAPI server. No separate frontend process is needed.
 
 ### Step 8: Access the Application
 
-- **Frontend:** http://localhost:8501
+- **Frontend:** http://localhost:8000
 - **API Docs:** http://localhost:8000/docs
 - **API Health:** http://localhost:8000/health
 
@@ -189,11 +182,15 @@ streamlit run src/frontend/app.py --server.port 8501
 cotrial-ragv2/
 ├── src/
 │   ├── api/              # FastAPI backend
-│   ├── frontend/         # Streamlit frontend
-│   │   └── pages/        # Multi-page UI (login, trials, chat)
 │   ├── retrieval/        # Hybrid retrieval system
 │   ├── utils/            # Utilities (vector DB, SQL, LLM)
 │   └── indexers/         # PDF indexing
+├── static/               # Static HTML/CSS/JS frontend
+│   ├── index.html        # Login page
+│   ├── trials.html       # Trial selection page
+│   ├── chat.html         # Chat interface
+│   ├── css/              # Stylesheets
+│   └── js/               # JavaScript modules
 ├── scripts/              # Setup and migration scripts
 ├── data/
 │   ├── AllProvidedFiles_438/  # PDF files

@@ -18,7 +18,7 @@ The system uses **result-aware routing** with LLM-based quality evaluation to in
 - **Parallel Search**: PDF and SQL searches execute simultaneously
 - **Result Quality Evaluation**: LLM evaluates and combines results intelligently
 - **FastAPI API**: Modern, type-safe API with automatic documentation
-- **Streamlit Frontend**: Beautiful chat interface for querying
+- **Static HTML/CSS/JS Frontend**: Clean, responsive chat interface for querying
 - **GPT-4o Answer Generation**: High-quality synthesized answers from retrieved context
 
 ## Architecture

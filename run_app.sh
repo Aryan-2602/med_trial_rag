@@ -25,10 +25,9 @@ source .venv/bin/activate
 
 # Check dependencies
 echo -e "${BLUE}🔍 Checking dependencies...${NC}"
-if ! python3 -c "import chromadb, mysql.connector, openai, fastapi, streamlit" 2>/dev/null; then
+if ! python3 -c "import chromadb, mysql.connector, openai, fastapi" 2>/dev/null; then
     echo -e "${YELLOW}⚠️  Installing dependencies...${NC}"
     pip install -q -r requirements.txt
-    pip install -q -r requirements-frontend.txt
     echo -e "${GREEN}✅ Dependencies installed${NC}"
 else
     echo -e "${GREEN}✅ Dependencies ready${NC}"
@@ -179,7 +178,6 @@ cleanup() {
     echo ""
     echo -e "${YELLOW}🛑 Shutting down...${NC}"
     kill $API_PID 2>/dev/null || true
-    kill $FRONTEND_PID 2>/dev/null || true
     exit 0
 }
 
@@ -204,32 +202,21 @@ for i in {1..30}; do
     fi
 done
 
-# Start frontend
-echo -e "${BLUE}🚀 Starting frontend on http://localhost:8501...${NC}"
-streamlit run src/frontend/app.py --server.port 8501 --server.headless true > /tmp/rag_frontend.log 2>&1 &
-FRONTEND_PID=$!
-
-# Wait for frontend to be ready
-echo -e "${YELLOW}⏳ Waiting for frontend to start...${NC}"
-sleep 3
-
 echo ""
 echo -e "${GREEN}════════════════════════════════════════${NC}"
 echo -e "${GREEN}✅ Application is running!${NC}"
 echo -e "${GREEN}════════════════════════════════════════${NC}"
 echo ""
 echo -e "${BLUE}📍 Access points:${NC}"
-echo -e "   Frontend: ${GREEN}http://localhost:8501${NC}"
+echo -e "   Frontend: ${GREEN}http://localhost:8000${NC}"
 echo -e "   API Docs: ${GREEN}http://localhost:8000/docs${NC}"
 echo -e "   API Health: ${GREEN}http://localhost:8000/health${NC}"
 echo ""
-echo -e "${BLUE}📊 Process IDs:${NC}"
+echo -e "${BLUE}📊 Process ID:${NC}"
 echo -e "   API: $API_PID"
-echo -e "   Frontend: $FRONTEND_PID"
 echo ""
 echo -e "${BLUE}📝 Logs:${NC}"
 echo -e "   API: ${YELLOW}tail -f /tmp/rag_api.log${NC}"
-echo -e "   Frontend: ${YELLOW}tail -f /tmp/rag_frontend.log${NC}"
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"
 echo ""
