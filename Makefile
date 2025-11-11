@@ -40,6 +40,10 @@ migrate-sas:
 	PYTHONPATH=. python scripts/migrate_sas_to_mysql_optimized.py \
 		--input-dir data/AllProvidedFiles_438/h3e_us_s130_control_data
 
+# Create dummy clinical trial data (replaces SAS migration for now)
+create-dummy-data:
+	PYTHONPATH=. python scripts/create_dummy_clinical_trial_data.py
+
 # Build PDF indices locally using Chroma vector DB
 build-pdf-indices-local:
 	PYTHONPATH=. python scripts/build_pdf_index_vector_db.py \

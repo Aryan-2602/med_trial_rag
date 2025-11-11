@@ -16,13 +16,3 @@ openai>=1.12.0
 
 # Note: pandas, pypdf, pyreadstat are only needed when building indices
 # They're installed separately when needed
-esions.sas7bdat
-visit.sas7bdat
-vitals.sas7bdat
-syst.sas7bdat
-ttevent.sas7bdat
-sdytrt.sas7bdat
-pdsumm.sas7bdat
-exsum.sas7bdat
-events.sas7bdat
-history.sas7bdat

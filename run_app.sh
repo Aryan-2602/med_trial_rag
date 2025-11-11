@@ -88,6 +88,60 @@ else
     exit 1
 fi
 
+# Check if dummy SQL tables exist (optional, non-blocking)
+echo -e "${BLUE}📊 Checking dummy SQL tables...${NC}"
+CREATE_TABLES=false
+
+# Quick check: just try to connect and see if patients table exists
+# This is much faster than running the full Python script
+if mysql -u "$MYSQL_USER" -h "$MYSQL_HOST" -p"$MYSQL_PASSWORD" -e "USE $MYSQL_DB; SELECT COUNT(*) FROM patients LIMIT 1;" >/dev/null 2>&1; then
+    PATIENT_COUNT=$(mysql -u "$MYSQL_USER" -h "$MYSQL_HOST" -p"$MYSQL_PASSWORD" -e "USE $MYSQL_DB; SELECT COUNT(*) FROM patients;" 2>/dev/null | tail -1)
+    if [ -n "$PATIENT_COUNT" ] && [ "$PATIENT_COUNT" -gt 0 ] 2>/dev/null; then
+        echo -e "${GREEN}✅ Dummy SQL tables found with data (${PATIENT_COUNT} patients)${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Dummy SQL tables exist but are empty${NC}"
+        read -p "Create dummy SQL tables and data now? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            CREATE_TABLES=true
+        else
+            echo -e "${YELLOW}⚠️  Skipping table creation. You can create later with: make create-dummy-data${NC}"
+        fi
+    fi
+elif mysql -u "$MYSQL_USER" -h "$MYSQL_HOST" -p"$MYSQL_PASSWORD" -e "USE $MYSQL_DB; SHOW TABLES LIKE 'patients';" >/dev/null 2>&1; then
+    # Table exists but query failed - probably empty
+    echo -e "${YELLOW}⚠️  Dummy SQL tables exist but may be empty${NC}"
+    read -p "Create dummy SQL tables and data now? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        CREATE_TABLES=true
+    else
+        echo -e "${YELLOW}⚠️  Skipping table creation. You can create later with: make create-dummy-data${NC}"
+    fi
+else
+    # Tables don't exist
+    echo -e "${YELLOW}⚠️  Dummy SQL tables not found${NC}"
+    read -p "Create dummy SQL tables and data now? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        CREATE_TABLES=true
+    else
+        echo -e "${YELLOW}⚠️  Skipping table creation. You can create later with: make create-dummy-data${NC}"
+    fi
+fi
+
+# Create tables if needed
+if [ "$CREATE_TABLES" = true ]; then
+    echo -e "${BLUE}🏗️  Creating dummy SQL tables and data (this may take a few minutes)...${NC}"
+    PYTHONPATH=. python3 scripts/create_dummy_clinical_trial_data.py
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Dummy SQL tables and data created${NC}"
+    else
+        echo -e "${RED}❌ Failed to create dummy tables. Check errors above.${NC}"
+        exit 1
+    fi
+fi
+
 # Check if PDF indices exist
 echo -e "${BLUE}📚 Checking PDF indices...${NC}"
 if [ -d "data/vector_db" ] && [ -f "data/vector_db/chroma.sqlite3" ]; then
@@ -108,7 +162,7 @@ fi
 # Build indices if needed
 if [ "$BUILD_INDICES" = true ]; then
     echo -e "${BLUE}🏗️  Building PDF indices (this may take a few minutes)...${NC}"
-    PYTHONPATH=. python scripts/build_pdf_index_vector_db.py \
+    PYTHONPATH=. python3 scripts/build_pdf_index_vector_db.py \
         --input-dir data/AllProvidedFiles_438 \
         --model text-embedding-3-small
     echo -e "${GREEN}✅ PDF indices built${NC}"

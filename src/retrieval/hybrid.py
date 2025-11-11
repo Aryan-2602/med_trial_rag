@@ -65,6 +65,24 @@ class HybridRetriever:
             self.mysql_client = MySQLClient(self.config)
             if self.mysql_client.test_connection():
                 logger.info("mysql_connected", status="success")
+                
+                # Check if dummy tables exist (optional auto-creation)
+                # Only log, don't auto-create to avoid unexpected behavior
+                try:
+                    from src.utils.db_initializer import check_dummy_tables_exist
+                    tables_exist, has_data = check_dummy_tables_exist(self.config)
+                    if not tables_exist:
+                        logger.info(
+                            "dummy_tables_not_found",
+                            hint="Run 'make create-dummy-data' to create dummy clinical trial tables"
+                        )
+                    elif not has_data:
+                        logger.info(
+                            "dummy_tables_empty",
+                            hint="Run 'make create-dummy-data' to populate dummy clinical trial tables"
+                        )
+                except Exception as e:
+                    logger.debug("dummy_tables_check_failed", error=str(e))
             else:
                 logger.warning("mysql_connection_failed", status="failed")
         except Exception as e:
