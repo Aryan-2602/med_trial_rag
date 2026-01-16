@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trials - CoTrial RAG</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <h2>CoTrial RAG</h2>
+            <p>Professional Research Assistant</p>
+        </div>
+
+        <div class="user-profile">
+            <div class="user-profile-content">
+                <div class="user-avatar" id="user-avatar">U</div>
+                <div class="user-info">
+                    <p class="user-name" id="user-name">User</p>
+                    <p class="user-role">Professional Account</p>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn btn-secondary" style="margin-top: 2rem;" onclick="handleLogout()">🚪 Logout</button>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-with-sidebar">
+        <div class="trials-container">
+            <div class="trials-header">
+                <h1>Clinical Trials</h1>
+                <p>Select a trial to query data and documents</p>
+            </div>
+
+            <div class="trials-grid" id="trials-grid">
+                <!-- Trials will be rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/auth.js"></script>
+    <script>
+        // Check authentication
+        if (!authManager.requireAuth()) {
+            // Redirect handled by requireAuth
+        }
+
+        // Set user info
+        const username = authManager.getUsername();
+        if (username) {
+            document.getElementById('user-name').textContent = username;
+            const initial = username[0].toUpperCase();
+            document.getElementById('user-avatar').textContent = initial;
+        }
+
+        // Trial data
+        const trials = [
+            {
+                id: "S130",
+                title: "H3E-US-S130",
+                subtitle: "Non-Small Cell Lung Cancer Study",
+                status: "Active",
+                patients: "150+",
+                phase: "Phase III",
+                stubbed: false,
+            },
+            {
+                id: "S131",
+                title: "H3E-US-S131",
+                subtitle: "Advanced Melanoma Study",
+                status: "Recruiting",
+                patients: "200+",
+                phase: "Phase II",
+                stubbed: true,
+            },
+            {
+                id: "S132",
+                title: "H3E-US-S132",
+                subtitle: "Breast Cancer Study",
+                status: "Recruiting",
+                patients: "180+",
+                phase: "Phase III",
+                stubbed: true,
+            },
+            {
+                id: "S133",
+                title: "H3E-US-S133",
+                subtitle: "Colorectal Cancer Study",
+                status: "Recruiting",
+                patients: "120+",
+                phase: "Phase II",
+                stubbed: true,
+            },
+        ];
+
+        // Render trials
+        function renderTrials() {
+            const grid = document.getElementById('trials-grid');
+            grid.innerHTML = '';
+
+            trials.forEach(trial => {
+                const isActive = trial.id === "S130" && trial.status === "Active";
+                const statusColor = isActive ? "#8B4513" : "#5D4E37";
+                const stubbedClass = trial.stubbed ? 'stubbed' : '';
+                
+                const card = document.createElement('div');
+                card.className = `trial-card ${stubbedClass}`;
+                
+                let titleHtml = trial.title;
+                if (trial.stubbed) {
+                    titleHtml += ' <span class="stubbed-badge">Coming Soon</span>';
+                }
+
+                card.innerHTML = `
+                    <div class="trial-title">${titleHtml}</div>
+                    <div class="trial-subtitle">${trial.subtitle}</div>
+                    <div class="trial-meta">
+                        <div class="trial-meta-item">
+                            <div class="trial-meta-label">Status</div>
+                            <div class="trial-meta-value" style="color: ${statusColor};">${trial.status}</div>
+                        </div>
+                        <div class="trial-meta-item">
+                            <div class="trial-meta-label">Patients</div>
+                            <div class="trial-meta-value">${trial.patients}</div>
+                        </div>
+                        <div class="trial-meta-item">
+                            <div class="trial-meta-label">Phase</div>
+                            <div class="trial-meta-value">${trial.phase}</div>
+                        </div>
+                    </div>
+                    ${!trial.stubbed ? `<button class="btn" style="margin-top: 1.5rem;" onclick="selectTrial('${trial.id}')">Chat with ${trial.title}</button>` : ''}
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        function selectTrial(trialId) {
+            authManager.setSelectedTrial(trialId);
+            window.location.href = '/static/chat.html';
+        }
+
+        function handleLogout() {
+            authManager.logout();
+            window.location.href = '/static/index.html';
+        }
+
+        // Initialize
+        renderTrials();
+    </script>
+</body>
+</html>
+

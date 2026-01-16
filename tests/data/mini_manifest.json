@@ -1,0 +1,18 @@
+{
+  "version": "v20250101",
+  "corpora": {
+    "pdf": {
+      "prefix": "rag/pdf_index/v20250101/",
+      "files": ["index.faiss", "ids.jsonl", "docs.jsonl"],
+      "dimension": 1536,
+      "count": 10
+    },
+    "sas": {
+      "prefix": "rag/sas_index/v20250101/",
+      "files": ["index.faiss", "ids.jsonl", "docs.jsonl"],
+      "dimension": 1536,
+      "count": 10
+    }
+  }
+}
+

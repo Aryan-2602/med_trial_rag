@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - CoTrial RAG</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="login-container">
+        <div style="text-align: center; margin-bottom: 2.5rem;">
+            <h1 class="login-title">CoTrial RAG</h1>
+            <p class="login-subtitle">Clinical Trial Data Query System</p>
+        </div>
+
+        <div id="alert-container"></div>
+
+        <form id="login-form">
+            <div class="form-group">
+                <label for="username" class="form-label">Username</label>
+                <input 
+                    type="text" 
+                    id="username" 
+                    class="form-input" 
+                    placeholder="Enter your username"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password" class="form-label">Password</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    class="form-input" 
+                    placeholder="Enter your password"
+                    required
+                >
+            </div>
+
+            <button type="submit" class="btn">Sign In</button>
+        </form>
+    </div>
+
+    <script src="/static/js/auth.js"></script>
+    <script>
+        // Redirect if already authenticated
+        if (authManager.isAuthenticated()) {
+            window.location.href = '/static/trials.html';
+        }
+
+        // Handle login form
+        document.getElementById('login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const alertContainer = document.getElementById('alert-container');
+
+            if (!username || !password) {
+                alertContainer.innerHTML = `
+                    <div class="alert alert-error">
+                        Please enter both username and password
+                    </div>
+                `;
+                return;
+            }
+
+            if (authManager.login(username, password)) {
+                alertContainer.innerHTML = `
+                    <div class="alert alert-success">
+                        ✅ Login successful!
+                    </div>
+                `;
+                setTimeout(() => {
+                    window.location.href = '/static/trials.html';
+                }, 500);
+            } else {
+                alertContainer.innerHTML = `
+                    <div class="alert alert-error">
+                        Login failed. Please try again.
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
+
