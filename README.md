@@ -195,8 +195,12 @@ cotrial-ragv2/
 │   │   └── vector_db.py      # ChromaDB client
 │   ├── indexers/             # Index builders
 │   │   └── common.py         # Common utilities
-│   └── frontend/             # Streamlit frontend
-│       └── app.py            # Chat interface
+├── static/                   # Static HTML/CSS/JS frontend
+│   ├── index.html            # Login page
+│   ├── chat.html             # Chat interface
+│   ├── trials.html           # Trial selection
+│   ├── css/                  # Stylesheets
+│   └── js/                   # JavaScript modules
 ├── scripts/                  # Utility scripts
 │   ├── build_pdf_index_vector_db.py
 │   ├── migrate_sas_to_mysql_optimized.py
